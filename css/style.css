@@ -128,3 +128,11 @@ th { color: var(--primary-dark); background: #f6f9ff; position: sticky; top: 0; 
   .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
   main { padding: 1rem 1.2rem; }
 }
+
+
+input, select, textarea, .btn, .nav-btn, .sub-btn { min-height: 44px; font-size: 16px; }
+.top-nav { padding-bottom: calc(.75rem + env(safe-area-inset-bottom)); }
+@supports (-webkit-touch-callout: none) {
+  body { -webkit-text-size-adjust: 100%; }
+}
+.late-row { background: #ffe9ec; }
