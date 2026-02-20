@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/dlwms/schemas/v2000.json",
+  "title": "DLWMS Schemas v2000",
+  "type": "object",
+  "defs": {
+    "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$" },
+    "isoDateTime": { "type": "string", "format": "date-time" },
+    "warehouseCode": { "type": "string", "minLength": 2, "maxLength": 32, "pattern": "^[A-Za-z0-9_-]+$" },
+    "remiseItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sku", "qtyTotal", "qtyRemaining", "flags"],
+      "properties": {
+        "sku": { "$ref": "#/defs/id" },
+        "description": { "type": "string", "maxLength": 240 },
+        "zone": { "type": "string", "maxLength": 32 },
+        "aisle": { "type": "string", "maxLength": 32 },
+        "binId": { "$ref": "#/defs/id" },
+        "qtyTotal": { "type": "number", "exclusiveMinimum": 0 },
+        "qtyRemaining": { "type": "number", "minimum": 0 },
+        "flags": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scrap", "rebox", "forced"],
+          "properties": {
+            "scrap": { "type": "boolean" },
+            "rebox": { "type": "boolean" },
+            "forced": { "type": "boolean" }
+          }
+        },
+        "forcedReason": { "type": "string", "maxLength": 240 }
+      }
+    },
+    "remise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "warehouse", "status", "createdAt", "updatedAt", "items", "cursor"],
+      "properties": {
+        "id": { "$ref": "#/defs/id" },
+        "warehouse": { "$ref": "#/defs/warehouseCode" },
+        "status": { "type": "string", "enum": ["draft", "pending", "in_progress", "completed", "cancelled"] },
+        "createdAt": { "$ref": "#/defs/isoDateTime" },
+        "updatedAt": { "$ref": "#/defs/isoDateTime" },
+        "items": { "type": "array", "items": { "$ref": "#/defs/remiseItem" } },
+        "cursor": {
+          "type": "object",
+          "required": ["index"],
+          "additionalProperties": false,
+          "properties": { "index": { "type": "integer", "minimum": 0 } }
+        }
+      }
+    },
+    "syncOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["opId", "tsMs", "entity", "entityId", "patch", "status"],
+      "properties": {
+        "opId": { "$ref": "#/defs/id" },
+        "tsMs": { "type": "integer", "minimum": 0 },
+        "entity": { "type": "string", "enum": ["remise", "palette", "conteneur", "message", "layout", "settings"] },
+        "entityId": { "$ref": "#/defs/id" },
+        "patch": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["op", "path"],
+            "properties": {
+              "op": { "type": "string", "enum": ["add", "remove", "replace", "move", "copy", "test"] },
+              "path": { "type": "string", "minLength": 1 },
+              "value": {}
+            }
+          }
+        },
+        "status": { "type": "string", "enum": ["queued", "running", "ack", "rejected", "dead_letter"] }
+      }
+    }
+  }
+}

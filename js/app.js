@@ -1,164 +1,70 @@
-import { eventBus } from './core/eventBus.js';
-import { DLWMS_STATE, dispatch, initCoreState } from './core/state.js';
+import { stateEngine } from './core/stateEngine.js';
+import { storageEngine } from './core/storageEngine.js';
+import { startLongTaskObserver } from './core/performance.js';
+import { remiseModule } from './modules/remise.js';
 
-const pageMeta = {
-  accueil: {
-    title: 'Accueil Opérationnel',
-    description: 'Vue centrale des opérations en mode terrain mobile.',
-    objective: 'Prioriser et déclencher rapidement les actions critiques.',
-    warning: 'Le mode hors-ligne enregistre localement chaque action.',
-    module: 'Dashboard'
-  },
-  remise: buildMeta('Remise', 'Gestion des remises et files prioritaires.'),
-  consolidation: buildMeta('Consolidation', 'Rapprochement et analyse des stocks.'),
-  palette: buildMeta('Palette', 'Suivi des palettes actives et clôture.'),
-  conteneurs: buildMeta('Conteneurs', 'Planification urgente et retards.'),
-  plus: buildMeta('Plus', 'Paramètres, communication, analytics et maintenance.')
-};
-
-function buildMeta(title, description) {
-  return {
-    title,
-    description,
-    objective: 'Maintenir les flux stables avec traçabilité complète.',
-    warning: 'Contrôles validés par moteur de règles local.',
-    module: title
-  };
-}
-
-function renderHeader() {
-  const header = document.getElementById('topHeader');
-  const onlineClass = DLWMS_STATE.device.isOnline ? 'badge-ok' : 'badge-offline';
-  const onlineLabel = DLWMS_STATE.device.isOnline ? 'Sync prêt' : 'Offline actif';
-  header.innerHTML = `
-    <h1>DL WMS · ${DLWMS_STATE.settings.warehouseName}</h1>
-    <p>Mode ${DLWMS_STATE.userMode} · Version ${DLWMS_STATE.version}</p>
-    <div class="status-line">
-      <span class="badge ${onlineClass}">${onlineLabel}</span>
-      <span class="badge">Changements: ${DLWMS_STATE.sync.offlineChanges}</span>
-      <span class="badge">Boot ${DLWMS_STATE.performance.bootMs}ms</span>
-    </div>
+function renderStatus() {
+  const state = stateEngine.getState();
+  document.getElementById('statusLine').innerHTML = `
+    <span class="badge">${state.online ? 'online' : 'offline'}</span>
+    <span class="badge">pending ${state.stats.pending}</span>
+    <span class="badge">en cours ${state.stats.inProgress}</span>
+    <span class="badge">complétées ${state.stats.completed}</span>
   `;
 }
 
-function panel(title, content, key, open = true) {
-  const isOpen = DLWMS_STATE.ui.collapsed[key] ? '' : 'open';
-  return `<details class="panel" ${open ? isOpen : ''}><summary>${title}</summary><div class="panel-body">${content}</div></details>`;
-}
+function card(title, body) { return `<section class="card"><h2>${title}</h2>${body}</section>`; }
 
-function renderAccueil() {
-  const stats = `
-    <div class="stats-grid">
-      ${stat('Remises en attente', DLWMS_STATE.modules.remise.pending)}
-      ${stat('Palettes actives', DLWMS_STATE.modules.palette.active)}
-      ${stat('Conteneurs urgents', DLWMS_STATE.modules.conteneurs.urgent)}
-      ${stat('Items <20 détectés', DLWMS_STATE.modules.consolidation.lowStockItems)}
-    </div>`;
-
-  const actions = `
-    <div class="tiles-grid">
-      ${tile('Générer Remise', 'home:run-action')}
-      ${tile('Prochaine Remise', 'home:run-action')}
-      ${tile('Analyse <20', 'home:run-action')}
-      ${tile('Nouvelle Palette', 'home:run-action')}
-      ${tile('Planifier Conteneur', 'home:run-action')}
-    </div>`;
-
-  const alerts = [
-    ['Conteneurs en retard', `${DLWMS_STATE.modules.conteneurs.overdue}`, 'red'],
-    ['Actions forcées aujourd\'hui', `${Math.max(1, DLWMS_STATE.sync.offlineChanges)}`, 'amber'],
-    ['Alerte stock faible', `${DLWMS_STATE.modules.consolidation.lowStockItems}`, 'green']
-  ].map((a) => `<div class="list-item"><span>${a[0]}</span><span class="status-rag ${a[2]}">${a[1]}</span></div>`).join('');
-
-  const activity = DLWMS_STATE.logs.slice(0, 10).map((log) => (
-    `<div class="log-item"><strong>${log.action}</strong><div>${new Date(log.timestamp).toLocaleTimeString('fr-CA')}</div></div>`
-  )).join('') || '<div class="log-item">Aucune activité.</div>';
-
-  return [
-    panel('Quick Stats', stats, 'home-stats'),
-    panel('Actions principales', actions, 'home-actions'),
-    panel('Panneau d\'alertes', alerts, 'home-alerts'),
-    panel('Flux activité (10 derniers)', activity, 'home-feed')
-  ].join('');
-}
-
-const stat = (label, value) => `<article class="stat-box"><span>${label}</span><strong>${value}</strong></article>`;
-const tile = (label, action) => `<button class="action-tile" data-action="${action}">${label}</button>`;
-
-function renderSimpleModule(name) {
-  const module = DLWMS_STATE.modules[name] || {};
-  const items = Object.entries(module).map(([k, v]) => `<div class="list-item"><span>${k}</span><strong>${v}</strong></div>`).join('');
-  return `
-    ${panel('Statut temps réel', items || '<div class="list-item">Aucune donnée</div>', `${name}-status`)}
-    ${panel('Actions rapides', `<div class="button-row"><button class="primary" data-action="home:run-action">Valider</button><button data-action="settings:toggle-mode">Basculer mode</button></div>`, `${name}-actions`)}
-  `;
-}
-
-function renderPlusModule() {
-  return `
-    ${panel('Communication / Layout / Analytics', '<div class="list-item"><span>Modules prêts pour sync API future</span><span class="chip">API-ready</span></div>', 'plus-core')}
-    ${panel('Maintenance', '<div class="button-row"><button data-action="settings:toggle-mode">Changer rôle</button><button data-action="logs:clear">Vider logs</button></div>', 'plus-maintenance')}
-  `;
-}
-
-function renderPage() {
-  const page = DLWMS_STATE.ui.activePage;
-  const meta = pageMeta[page];
+function renderSimplePage(name) {
   const root = document.getElementById('pageRoot');
-  const tpl = document.getElementById('moduleTemplate');
-  const node = tpl.content.firstElementChild.cloneNode(true);
-
-  node.querySelector('.page-meta').innerHTML = `
-    <h2>${meta.title}</h2>
-    <p>${meta.description}</p>
-    <p><strong>Objectif:</strong> ${meta.objective}</p>
-    <p><strong>Note:</strong> ${meta.warning}</p>
-    <div class="status-line">
-      <span class="chip">Entrepôt: ${DLWMS_STATE.settings.warehouseName}</span>
-      <span class="chip">Mode: ${DLWMS_STATE.userMode}</span>
-      <span class="chip">Statut: ${DLWMS_STATE.device.isOnline ? 'online' : 'offline'}</span>
-    </div>
-  `;
-
-  let content = '';
-  if (page === 'accueil') content = renderAccueil();
-  else if (page === 'plus') content = renderPlusModule();
-  else content = renderSimpleModule(page);
-
-  node.querySelector('.page-content').innerHTML = content;
-  root.replaceChildren(node);
+  root.innerHTML = card(name, '<p class="small">Module skeleton prêt (API serveur/auth non spécifiées).</p>');
 }
 
-function bindInteractions() {
-  document.querySelector('.bottom-nav').addEventListener('click', (event) => {
-    const button = event.target.closest('[data-page]');
-    if (!button) return;
-    dispatch('nav:set-page', { page: button.dataset.page });
-  });
+async function renderPage() {
+  const page = stateEngine.getState().activePage;
+  renderStatus();
+  if (page === 'accueil') {
+    const root = document.getElementById('pageRoot');
+    root.innerHTML = [
+      card('Quick Stats', `<div class="stack"><div>Remises pending: <strong>${stateEngine.getState().stats.pending}</strong></div><div>Remises en cours: <strong>${stateEngine.getState().stats.inProgress}</strong></div></div>`),
+      card('Actions rapides', '<p class="small">Utilisez Remise pour générer, traiter et clôturer une file.</p>')
+    ].join('');
+    return;
+  }
+  if (page === 'remise') {
+    await remiseModule.render();
+    return;
+  }
+  if (page === 'consolidation') return renderSimplePage('Consolidation');
+  if (page === 'palette') return renderSimplePage('Palette');
+  if (page === 'conteneurs') return renderSimplePage('Conteneurs');
+  return renderSimplePage('Plus');
+}
 
-  document.body.addEventListener('click', (event) => {
-    const actionNode = event.target.closest('[data-action]');
-    if (!actionNode) return;
-    dispatch(actionNode.dataset.action, { source: 'ui' });
-    if (navigator.vibrate && DLWMS_STATE.settings.hapticEnabled) navigator.vibrate(15);
-  });
-
-  eventBus.subscribe('state:changed', () => {
-    renderHeader();
-    renderPage();
-    document.querySelectorAll('.nav-tab').forEach((tab) => {
-      tab.classList.toggle('active', tab.dataset.page === DLWMS_STATE.ui.activePage);
+function bindNavigation() {
+  document.querySelectorAll('.nav-tab').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      document.querySelectorAll('.nav-tab').forEach((el) => el.classList.remove('active'));
+      btn.classList.add('active');
+      stateEngine.commit((s) => { s.activePage = btn.dataset.page; }, 'nav:set_page');
+      await renderPage();
     });
   });
-
-  eventBus.subscribe('network:changed', () => renderHeader());
 }
 
-function initApp() {
-  initCoreState();
-  bindInteractions();
-  renderHeader();
-  renderPage();
+async function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    await navigator.serviceWorker.register('/service-worker.js');
+  }
 }
 
-initApp();
+async function boot() {
+  startLongTaskObserver();
+  await storageEngine.init();
+  await remiseModule.init();
+  bindNavigation();
+  await registerServiceWorker();
+  await renderPage();
+}
+
+boot();

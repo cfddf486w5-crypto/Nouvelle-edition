@@ -1,155 +1,210 @@
-import { DLWMS_STATE, mutateState } from '../core/state.js';
-import { formatDate } from '../utils.js';
+import { stateEngine } from '../core/stateEngine.js';
+import { storageEngine } from '../core/storageEngine.js';
+import { validateRemise } from '../core/validator.js';
+import { auditEngine } from '../core/auditEngine.js';
+import { aiAdapter } from '../core/aiAdapter.js';
+import { syncEngine } from '../core/syncEngine.js';
 
-function nextRemiseId() {
-  const next = DLWMS_STATE.settings.idCounters.remise + 1;
-  return `LAVREM${String(next).padStart(4, '0')}`;
+function nowIso() { return new Date().toISOString(); }
+
+function remiseItemFromForm(form) {
+  return {
+    sku: form.sku.value.trim().toUpperCase(),
+    description: form.description.value.trim(),
+    zone: form.zone.value.trim().toUpperCase(),
+    aisle: form.aisle.value.trim().toUpperCase(),
+    binId: form.binId.value.trim().toUpperCase(),
+    qtyTotal: Number(form.qty.value || 0),
+    qtyRemaining: Number(form.qty.value || 0),
+    flags: { scrap: false, rebox: false, forced: false }
+  };
 }
 
-export function scanItem(itemCode) {
-  const code = String(itemCode || '').trim().toUpperCase();
-  if (!code) return;
-  mutateState((state) => {
-    const ref = state.settings.productMasterFile[code] || {};
-    const existing = state.activeRemise?.items.find((i) => i.item === code);
-    if (existing) {
-      existing.qtyTotal += 1;
-      existing.qtyRemaining += 1;
-      return;
-    }
-    if (!state.activeRemise) {
-      state.activeRemise = { id: nextRemiseId(), createdAt: Date.now(), status: 'pending', items: [], paused: false, forceReason: '' };
-      state.settings.idCounters.remise += 1;
-    }
-    state.activeRemise.items.push({
-      item: code,
-      description: ref.description || '',
-      zone: ref.zone || '',
-      aisle: ref.aisle || '',
-      bin: ref.bin || '',
-      qtyTotal: 1,
-      qtyRemaining: 1,
-      scrap: false,
-      rebox: false,
-      forced: false
-    });
-  }, 'remise:scan_item');
+function currentRemise(state) {
+  return state.remises.find((r) => r.id === state.currentRemiseId) || null;
 }
 
-export function incrementQty(item) { adjustQty(item, 1); }
-export function decrementQty(item) { adjustQty(item, -1); }
-function adjustQty(itemCode, delta) {
-  mutateState((state) => {
-    const target = state.activeRemise?.items.find((item) => item.item === itemCode);
-    if (!target) return;
-    target.qtyTotal = Math.max(0, target.qtyTotal + delta);
-    target.qtyRemaining = Math.min(target.qtyTotal, Math.max(0, target.qtyRemaining + delta));
-  }, 'remise:adjust_qty');
-}
-
-export function openItemPopup(itemCode) {
-  const dialog = document.getElementById('itemActionDialog');
-  const label = document.getElementById('dialogItemLabel');
-  label.textContent = `Item: ${itemCode}`;
-  dialog.showModal();
-  dialog.returnValue = 'annuler';
-  dialog.addEventListener('close', () => {
-    if (dialog.returnValue === 'briser') markScrap(itemCode);
-    if (dialog.returnValue === 'rebox') markRebox(itemCode);
-    if (dialog.returnValue === 'supprimer') removeItem(itemCode);
-  }, { once: true });
-}
-
-export function markScrap(itemCode) { setFlag(itemCode, 'scrap', true); }
-export function markRebox(itemCode) { setFlag(itemCode, 'rebox', true); }
-function setFlag(itemCode, key, value) {
-  mutateState((state) => {
-    const target = state.activeRemise?.items.find((item) => item.item === itemCode);
-    if (!target) return;
-    target[key] = value;
-  }, 'remise:set_flag');
-}
-
-export function removeItem(itemCode) {
-  mutateState((state) => {
-    if (!state.activeRemise) return;
-    state.activeRemise.items = state.activeRemise.items.filter((item) => item.item !== itemCode);
-  }, 'remise:remove_item');
-}
-
-export function sortByZonePath(items) {
-  const order = DLWMS_STATE.settings.zoneOrder;
-  return [...items].sort((a, b) => {
-    const zoneDelta = order.indexOf(a.zone) - order.indexOf(b.zone);
-    if (zoneDelta !== 0) return zoneDelta;
-    if (a.aisle !== b.aisle) return String(a.aisle).localeCompare(String(b.aisle));
-    return String(a.bin).localeCompare(String(b.bin));
+async function persistRemise(remise, action) {
+  const check = validateRemise(remise);
+  if (!check.valid) throw new Error(check.errors.join(' | '));
+  await storageEngine.put('remises', remise);
+  await auditEngine.log(action, 'remise', remise.id, { status: remise.status });
+  await syncEngine.enqueue({
+    opId: `op-${Date.now()}`,
+    tsMs: Date.now(),
+    entity: 'remise',
+    entityId: remise.id,
+    patch: [{ op: 'replace', path: '/status', value: remise.status }],
+    status: 'queued'
   });
 }
 
-export function saveRemise() {
-  mutateState((state) => {
-    if (!state.activeRemise || !state.activeRemise.items.length) return;
-    state.activeRemise.items = sortByZonePath(state.activeRemise.items);
-    state.remises.unshift(state.activeRemise);
-    state.activeRemise = null;
-  }, 'remise:save');
+function renderGenerate(remise) {
+  const rows = remise.items.map((i) => `<tr><td>${i.sku}</td><td>${i.zone}</td><td>${i.binId}</td><td>${i.qtyTotal}</td></tr>`).join('') || '<tr><td colspan="4">Aucun item</td></tr>';
+  return `<section class="card stack">
+    <h2>Générer</h2>
+    <form id="remiseAddItemForm" class="stack">
+      <input name="sku" placeholder="SKU" required />
+      <input name="description" placeholder="Description" required />
+      <div class="grid-2">
+        <input name="zone" placeholder="Zone" required />
+        <input name="aisle" placeholder="Allée" required />
+      </div>
+      <div class="grid-2">
+        <input name="binId" placeholder="Bin" required />
+        <input name="qty" placeholder="Qté" type="number" min="1" required />
+      </div>
+      <button class="primary" type="submit">Ajouter item</button>
+    </form>
+    <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Zone</th><th>Bin</th><th>Qté</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <button id="btnFinalizeDraft" class="primary">Passer en attente</button>
+  </section>`;
 }
 
-export function clearActiveRemise() { mutateState((state) => { state.activeRemise = null; }, 'remise:clear_active'); }
-export function startRemise(id) { mutateState((state) => { const found = state.remises.find((r) => r.id === id); if (found) found.status = 'in_progress'; }, 'remise:start'); }
-export function scanProduct() { completeItem(); }
-export function confirmBin() { return true; }
-export function forceComplete(reason) { mutateState((state) => { if (!state.activeRemise) return; state.activeRemise.forceReason = reason; state.activeRemise.items.forEach((i) => { i.qtyRemaining = 0; i.forced = true; }); }, 'remise:force'); }
-export function completeItem() {
-  mutateState((state) => {
-    const remise = state.remises.find((r) => r.status === 'in_progress');
-    const current = remise?.items.find((item) => item.qtyRemaining > 0);
-    if (!current) return;
-    current.qtyRemaining = Math.max(0, current.qtyRemaining - 1);
-    state.analytics.totalScans += 1;
-  }, 'remise:complete_item');
-}
-export function completeRemise() { mutateState((state) => { const remise = state.remises.find((r) => r.status === 'in_progress'); if (!remise) return; if (remise.items.every((i) => i.qtyRemaining === 0)) remise.status = 'completed'; }, 'remise:complete'); }
-
-function renderDraftTable() {
-  const tbody = document.querySelector('#remiseDraftTable tbody');
-  const rows = DLWMS_STATE.activeRemise?.items || [];
-  tbody.innerHTML = rows.map((row) => `<tr><td>${row.item}</td><td>${row.description}</td><td>${row.zone}</td><td>${row.aisle}</td><td>${row.bin}</td><td>${row.qtyTotal}</td><td><button data-item="${row.item}" class="btn-secondary action-popup">⚙️</button></td></tr>`).join('') || '<tr><td colspan="7">Aucun item.</td></tr>';
-  tbody.querySelectorAll('.action-popup').forEach((btn) => btn.addEventListener('click', () => openItemPopup(btn.dataset.item)));
+function renderQueue(state) {
+  const queue = state.remises.filter((r) => r.status === 'pending');
+  const rows = queue.map((r) => `<tr><td>${r.id}</td><td>${r.items.length}</td><td><button data-id="${r.id}" class="start-btn">Démarrer</button></td></tr>`).join('') || '<tr><td colspan="3">Aucune remise pending</td></tr>';
+  return `<section class="card stack"><h2>Queue</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>Items</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
 }
 
-function renderQueueAndHistory() {
-  const queueBody = document.querySelector('#remiseQueueTable tbody');
-  const historyBody = document.querySelector('#remiseHistoryTable tbody');
-  queueBody.innerHTML = DLWMS_STATE.remises.filter((r) => r.status !== 'completed').map((r) => `<tr><td>${r.id}</td><td>${r.items.length}</td><td>${r.status}</td><td><button data-id="${r.id}" class="btn-secondary start-remise">▶️</button></td></tr>`).join('') || '<tr><td colspan="4">Aucune remise.</td></tr>';
-  historyBody.innerHTML = DLWMS_STATE.remises.map((r) => `<tr><td>${r.id}</td><td>${formatDate(r.createdAt)}</td><td>${r.items.length}</td><td>${r.status}</td></tr>`).join('') || '<tr><td colspan="4">Aucune remise.</td></tr>';
-  queueBody.querySelectorAll('.start-remise').forEach((btn) => btn.addEventListener('click', () => { startRemise(btn.dataset.id); renderAll(); }));
+async function renderProcess(remise) {
+  if (!remise) return `<section class="card"><h2>Traitement</h2><p class="small">Aucune remise active.</p></section>`;
+  const next = remise.items.find((i) => i.qtyRemaining > 0);
+  const hint = await aiAdapter.suggestNextAction({ items: remise.items, remiseId: remise.id });
+  return `<section class="card stack"><h2>Traitement ${remise.id}</h2>
+    <p>Prochain: <strong>${next?.sku || 'Terminé'}</strong> · bin ${next?.binId || '-'} · restant ${next?.qtyRemaining ?? 0}</p>
+    <p class="small">IA (${hint.mode}): ${hint.message}</p>
+    <div class="grid-2">
+      <button id="btnScanProduct" class="primary">Scanner produit</button>
+      <button id="btnConfirmBin">Confirmer bin</button>
+    </div>
+    <button id="btnForceComplete">Forcer avec raison</button>
+  </section>`;
 }
 
-function renderProcessPanel() {
-  const panel = document.getElementById('processPanel');
-  const active = DLWMS_STATE.remises.find((r) => r.status === 'in_progress');
-  if (!active) { panel.textContent = 'Sélectionnez une remise en attente.'; return; }
-  const next = active.items.find((item) => item.qtyRemaining > 0);
-  panel.innerHTML = `<strong>${active.id}</strong><br/>Prochain item: ${next?.item || 'Terminé'} (${next?.qtyRemaining ?? 0} restant) <br/><button id="btnProcessScan" class="btn">Scanner</button> <button id="btnProcessComplete" class="btn btn-secondary">Finaliser</button>`;
-  document.getElementById('btnProcessScan').addEventListener('click', () => { completeItem(); renderAll(); });
-  document.getElementById('btnProcessComplete').addEventListener('click', () => { completeRemise(); renderAll(); });
+function renderHistory(state) {
+  const rows = state.remises.filter((r) => r.status === 'completed').map((r) => `<tr><td>${r.id}</td><td>${r.updatedAt}</td><td>${r.items.length}</td></tr>`).join('') || '<tr><td colspan="3">Historique vide</td></tr>';
+  return `<section class="card stack"><h2>Historique</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>Date</th><th>Items</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
 }
 
-function renderAll() {
-  renderDraftTable();
-  renderQueueAndHistory();
-  renderProcessPanel();
-}
+async function renderRemisePage() {
+  const root = document.getElementById('pageRoot');
+  const state = stateEngine.getState();
+  let remise = currentRemise(state);
 
-export function initRemiseModule() {
-  document.getElementById('btnAddRemiseItem').addEventListener('click', () => {
-    scanItem(document.getElementById('remiseScanItem').value);
-    document.getElementById('remiseScanItem').value = '';
-    renderAll();
+  if (!remise) {
+    remise = {
+      id: await storageEngine.nextCounter('counter:remise', 'LAVREM', 4),
+      warehouse: 'LAVAL',
+      status: 'draft',
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      items: [],
+      cursor: { index: 0 }
+    };
+    stateEngine.commit((s) => { s.remises.unshift(remise); s.currentRemiseId = remise.id; }, 'remise:create_draft');
+  }
+
+  root.innerHTML = `${renderGenerate(remise)}${renderQueue(state)}${await renderProcess(state.remises.find((r) => r.status === 'in_progress'))}${renderHistory(state)}`;
+
+  document.getElementById('remiseAddItemForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const item = remiseItemFromForm(form);
+    if (item.qtyTotal <= 0) return;
+    stateEngine.commit((s) => {
+      const target = s.remises.find((r) => r.id === remise.id);
+      target.items.push(item);
+      target.updatedAt = nowIso();
+    }, 'remise:add_item');
+    renderRemisePage();
   });
-  document.getElementById('btnCompleteRemise').addEventListener('click', () => { saveRemise(); renderAll(); });
-  document.getElementById('btnOpenRemiseById').addEventListener('click', () => { startRemise(document.getElementById('scanRemiseId').value.trim()); renderAll(); });
-  renderAll();
+
+  document.getElementById('btnFinalizeDraft').addEventListener('click', async () => {
+    const updated = stateEngine.getState().remises.find((r) => r.id === remise.id);
+    if (!updated?.items?.length) return;
+    stateEngine.commit((s) => {
+      const target = s.remises.find((r) => r.id === remise.id);
+      target.status = 'pending';
+      target.updatedAt = nowIso();
+    }, 'remise:set_pending');
+    await persistRemise(stateEngine.getState().remises.find((r) => r.id === remise.id), 'remise_pending');
+    stateEngine.commit((s) => { s.currentRemiseId = null; }, 'remise:clear_current');
+    renderRemisePage();
+  });
+
+  root.querySelectorAll('.start-btn').forEach((btn) => btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    stateEngine.commit((s) => {
+      s.remises.forEach((r) => { if (r.status === 'in_progress') r.status = 'pending'; });
+      const target = s.remises.find((r) => r.id === id);
+      target.status = 'in_progress';
+      target.updatedAt = nowIso();
+      s.currentRemiseId = id;
+    }, 'remise:start');
+    await persistRemise(stateEngine.getState().remises.find((r) => r.id === id), 'remise_started');
+    renderRemisePage();
+  }));
+
+  const scanBtn = document.getElementById('btnScanProduct');
+  if (scanBtn) scanBtn.addEventListener('click', async () => {
+    const active = stateEngine.getState().remises.find((r) => r.status === 'in_progress');
+    if (!active) return;
+    stateEngine.commit((s) => {
+      const target = s.remises.find((r) => r.id === active.id);
+      const item = target.items.find((i) => i.qtyRemaining > 0);
+      if (item) item.qtyRemaining -= 1;
+      target.updatedAt = nowIso();
+    }, 'remise:scan_product');
+    await persistRemise(stateEngine.getState().remises.find((r) => r.id === active.id), 'remise_scan_product');
+    renderRemisePage();
+  });
+
+  const binBtn = document.getElementById('btnConfirmBin');
+  if (binBtn) binBtn.addEventListener('click', async () => {
+    const active = stateEngine.getState().remises.find((r) => r.status === 'in_progress');
+    if (!active) return;
+    const done = active.items.every((i) => i.qtyRemaining === 0);
+    if (done) {
+      stateEngine.commit((s) => {
+        const target = s.remises.find((r) => r.id === active.id);
+        target.status = 'completed';
+        target.metrics = { completedAt: nowIso() };
+        target.updatedAt = nowIso();
+        s.currentRemiseId = null;
+      }, 'remise:completed');
+      await persistRemise(stateEngine.getState().remises.find((r) => r.id === active.id), 'remise_completed');
+    }
+    renderRemisePage();
+  });
+
+  const forceBtn = document.getElementById('btnForceComplete');
+  if (forceBtn) forceBtn.addEventListener('click', async () => {
+    const reason = prompt('Raison obligatoire pour forcer la remise');
+    if (!reason?.trim()) return;
+    const active = stateEngine.getState().remises.find((r) => r.status === 'in_progress');
+    if (!active) return;
+    stateEngine.commit((s) => {
+      const target = s.remises.find((r) => r.id === active.id);
+      target.items.forEach((i) => { i.qtyRemaining = 0; i.flags.forced = true; i.forcedReason = reason.trim(); });
+      target.status = 'completed';
+      target.updatedAt = nowIso();
+      s.currentRemiseId = null;
+    }, 'remise:force_complete');
+    await auditEngine.log('remise_force_complete', 'remise', active.id, { reason });
+    await persistRemise(stateEngine.getState().remises.find((r) => r.id === active.id), 'remise_completed_forced');
+    renderRemisePage();
+  });
 }
+
+export const remiseModule = {
+  async init() {
+    const remises = await storageEngine.getAll('remises');
+    stateEngine.commit((s) => {
+      s.remises = remises;
+      const active = remises.find((r) => r.status === 'in_progress');
+      s.currentRemiseId = active?.id || null;
+    }, 'remise:bootstrap');
+  },
+  render: renderRemisePage
+};

@@ -1,28 +1,18 @@
-export function debounce(fn, wait = 200) {
-  let timeout;
-  return (...args) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => fn(...args), wait);
-  };
+export function batchFrame(callback) {
+  requestAnimationFrame(() => callback());
 }
 
-export function throttle(fn, wait = 200) {
-  let last = 0;
-  return (...args) => {
-    const now = Date.now();
-    if (now - last < wait) return;
-    last = now;
-    fn(...args);
-  };
-}
-
-export function rafBatch(callback) {
-  requestAnimationFrame(callback);
-}
-
-export function renderVirtualRows(rows, rowRenderer, container, start = 0, chunkSize = 200) {
-  container.innerHTML = '';
-  const fragment = document.createDocumentFragment();
-  rows.slice(start, start + chunkSize).forEach((row, idx) => fragment.appendChild(rowRenderer(row, idx + start)));
-  container.appendChild(fragment);
+export function startLongTaskObserver() {
+  if (!('PerformanceObserver' in window)) return null;
+  try {
+    const observer = new PerformanceObserver((list) => {
+      list.getEntries().forEach((entry) => {
+        if (entry.duration >= 50) console.warn('[LongTask]', entry.duration.toFixed(1), 'ms');
+      });
+    });
+    observer.observe({ type: 'longtask', buffered: true });
+    return observer;
+  } catch {
+    return null;
+  }
 }
