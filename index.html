@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DL WMS</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>DL WMS</h1>
+      <p class="subtitle">Gestion entrepôt multi-sites · Mobile-first</p>
+    </div>
+    <button id="btnPrintCurrent" class="btn btn-secondary" title="Imprimer la vue active">🖨️</button>
+  </header>
+
+  <nav class="top-nav" aria-label="Navigation principale">
+    <button class="nav-btn active" data-target="module1">Consolidation</button>
+    <button class="nav-btn" data-target="module2">Remise Laval</button>
+    <button class="nav-btn" data-target="module3">Palettes</button>
+    <button class="nav-btn" data-target="module4">Conteneurs</button>
+    <button class="nav-btn" data-target="module5">Communication</button>
+    <button class="nav-btn" data-target="module6">Layout Map</button>
+    <button class="nav-btn" data-target="module7">Paramètres</button>
+  </nav>
+
+  <main>
+    <section id="module1" class="module active">
+      <h2>1) Consolidation & Analyse (&lt;20 unités)</h2>
+
+      <details open class="card">
+        <summary>Import de fichiers</summary>
+        <div class="card-body">
+          <div class="grid-2">
+            <label class="file-label">📥 Importer inventaire
+              <input type="file" id="inventoryFile" accept=".csv,.txt" />
+            </label>
+            <label class="file-label">📥 Importer réception
+              <input type="file" id="receiptFile" accept=".csv,.txt" />
+            </label>
+          </div>
+          <div id="importSummary" class="muted">Aucun fichier importé.</div>
+        </div>
+      </details>
+
+      <details open class="card">
+        <summary>Paramètres d'analyse</summary>
+        <div class="card-body inline-actions">
+          <label>Seuil qty minimale
+            <input type="number" id="thresholdInput" min="1" value="20" />
+          </label>
+          <button id="btnRunAnalysis" class="btn">🔎 Analyser</button>
+          <button id="btnExportConsoCsv" class="btn btn-secondary">⬇️ Export CSV</button>
+          <button id="btnExportConsoExcel" class="btn btn-secondary">⬇️ Export Excel</button>
+          <button id="btnPrintConso" class="btn btn-secondary">🧾 Imprimer / PDF</button>
+        </div>
+      </details>
+
+      <details open class="card">
+        <summary>Résultats</summary>
+        <div class="card-body">
+          <div class="table-wrap">
+            <table id="consoTable">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Bins</th>
+                  <th>Qty par bin</th>
+                  <th>Qty totale</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section id="module2" class="module">
+      <h2>2) Remise en stock - Laval</h2>
+
+      <div class="sub-nav">
+        <button class="sub-btn active" data-subtarget="remiseGenerate">Générer remise</button>
+        <button class="sub-btn" data-subtarget="remiseQueue">Prochaine remise</button>
+        <button class="sub-btn" data-subtarget="remiseProcess">Traitement</button>
+        <button class="sub-btn" data-subtarget="remiseHistory">Historique</button>
+        <button class="sub-btn" data-subtarget="remiseSettings">Paramètres</button>
+      </div>
+
+      <section id="remiseGenerate" class="submodule active card">
+        <h3>Générer remise</h3>
+        <div class="card-body">
+          <label>Scan / saisie item
+            <input type="text" id="remiseScanItem" placeholder="Ex: SKU12345" />
+          </label>
+          <button id="btnAddRemiseItem" class="btn">➕ Ajouter</button>
+          <div class="table-wrap">
+            <table id="remiseDraftTable">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Description</th>
+                  <th>Zone</th>
+                  <th>Allée</th>
+                  <th>Bin</th>
+                  <th>Qty</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <button id="btnCompleteRemise" class="btn">✅ Compléter la remise</button>
+        </div>
+      </section>
+
+      <section id="remiseQueue" class="submodule card">
+        <h3>Prochaine remise</h3>
+        <div class="card-body">
+          <label>Scan ID Remise
+            <input type="text" id="scanRemiseId" placeholder="Ex: LAVREM0001" />
+          </label>
+          <button id="btnOpenRemiseById" class="btn">Ouvrir</button>
+          <div class="table-wrap">
+            <table id="remiseQueueTable">
+              <thead>
+                <tr><th>ID</th><th>Pièces</th><th>Statut</th><th>Action</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="remiseProcess" class="submodule card">
+        <h3>Traitement d'une remise</h3>
+        <div class="card-body">
+          <div id="processPanel" class="panel-muted">Sélectionnez une remise en attente.</div>
+        </div>
+      </section>
+
+      <section id="remiseHistory" class="submodule card">
+        <h3>Historique des remises</h3>
+        <div class="card-body table-wrap">
+          <table id="remiseHistoryTable">
+            <thead>
+              <tr><th>ID</th><th>Date</th><th>Pièces</th><th>Statut</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="remiseSettings" class="submodule card">
+        <h3>Paramètres Remise</h3>
+        <div class="card-body">
+          <label>Importer référentiel produits (CSV item,description,zone,allee,bin)
+            <input type="file" id="productRefFile" accept=".csv,.txt" />
+          </label>
+          <p id="productRefSummary" class="muted">Aucun référentiel chargé.</p>
+        </div>
+      </section>
+    </section>
+
+    <section id="module3" class="module">
+      <h2>3) Scan palette & QR / Pallet tracking</h2>
+      <details open class="card">
+        <summary>Palette en cours</summary>
+        <div class="card-body">
+          <p>ID palette active: <strong id="activePalletId">BE0000001</strong></p>
+          <label>Scan produit
+            <input type="text" id="palletScanInput" placeholder="Scanner SKU" />
+          </label>
+          <button id="btnAddPalletItem" class="btn">➕ Ajouter produit</button>
+          <div class="table-wrap">
+            <table id="palletCurrentTable">
+              <thead><tr><th>Item</th><th>Description</th><th>Qty</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details open class="card">
+        <summary>Actions palette</summary>
+        <div class="card-body inline-actions">
+          <button id="btnClosePallet" class="btn">✅ Palette terminée</button>
+          <button id="btnExportPalletCsv" class="btn btn-secondary">⬇️ Export historique CSV</button>
+          <button id="btnPrintPallets" class="btn btn-secondary">🖨️ Imprimer / PDF</button>
+          <div id="qrPlaceholder" class="qr-placeholder">QR placeholder (intégrer lib QR ici)</div>
+        </div>
+      </details>
+
+      <details open class="card">
+        <summary>Historique palettes</summary>
+        <div class="card-body table-wrap">
+          <table id="palletHistoryTable">
+            <thead><tr><th>ID</th><th>Date</th><th>Lignes</th><th>Imprimé</th><th>Scanné autre dépôt</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+
+    <section id="module4" class="module">
+      <h2>4) Conteneurs - Superviseur & Dispatcher</h2>
+      <details open class="card">
+        <summary>Import & gestion</summary>
+        <div class="card-body">
+          <label>Importer conteneurs CSV (id,date_arrivee,date_limite)
+            <input type="file" id="containersFile" accept=".csv,.txt" />
+          </label>
+          <div class="table-wrap">
+            <table id="containersTable">
+              <thead><tr><th>ID</th><th>Arrivée</th><th>Limite</th><th>Date planifiée</th><th>Statut</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section id="module5" class="module">
+      <h2>5) Communication inter-sites</h2>
+      <details open class="card">
+        <summary>Nouveau message</summary>
+        <div class="card-body grid-2">
+          <label>Site émetteur
+            <select id="msgFrom"></select>
+          </label>
+          <label>Site destinataire
+            <select id="msgTo"></select>
+          </label>
+          <label>Sujet<input id="msgSubject" type="text" /></label>
+          <label class="full">Message<textarea id="msgBody" rows="4"></textarea></label>
+          <button id="btnSendMessage" class="btn">📨 Envoyer</button>
+        </div>
+      </details>
+      <details open class="card">
+        <summary>Messages</summary>
+        <div class="card-body">
+          <label>Filtre site
+            <select id="msgFilter"></select>
+          </label>
+          <div class="table-wrap">
+            <table id="messagesTable">
+              <thead><tr><th>Date</th><th>De</th><th>À</th><th>Sujet</th><th>Message</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section id="module6" class="module">
+      <h2>6) Layout map entrepôt</h2>
+      <details open class="card">
+        <summary>Import & visualisation</summary>
+        <div class="card-body">
+          <label>Importer map JSON
+            <input type="file" id="layoutFile" accept=".json" />
+          </label>
+          <div id="layoutGrid" class="layout-grid"></div>
+          <div id="layoutEditor" class="panel-muted">Cliquez une case pour éditer ses propriétés.</div>
+        </div>
+      </details>
+    </section>
+
+    <section id="module7" class="module">
+      <h2>7) Paramètres & Outils</h2>
+      <details open class="card">
+        <summary>Configuration globale</summary>
+        <div class="card-body grid-2">
+          <label>Seuil global &lt;20
+            <input type="number" id="globalThreshold" value="20" />
+          </label>
+          <label>Format ID remise
+            <input type="text" id="remiseFormat" value="LAVREM" />
+          </label>
+          <label>Format ID palette
+            <input type="text" id="palletFormat" value="BE" />
+          </label>
+          <label>Ordre de zones (séparées par virgules)
+            <textarea id="zoneOrderInput" rows="3"></textarea>
+          </label>
+          <button id="btnSaveSettings" class="btn">💾 Sauvegarder</button>
+        </div>
+      </details>
+      <details open class="card">
+        <summary>Utilitaires</summary>
+        <div class="card-body inline-actions">
+          <button id="btnBackupData" class="btn btn-secondary">⬇️ Export dump JSON</button>
+          <button id="btnRestoreData" class="btn btn-secondary">⬆️ Restaurer dump JSON</button>
+          <input type="file" id="restoreFile" accept=".json" class="hidden" />
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <dialog id="itemActionDialog">
+    <form method="dialog" class="dialog-content">
+      <h4>Action item remise</h4>
+      <p id="dialogItemLabel"></p>
+      <menu>
+        <button value="briser" class="btn">🧩 Briser</button>
+        <button value="rebox" class="btn">📦 Rebox</button>
+        <button value="supprimer" class="btn btn-danger">🗑️ Supprimer</button>
+        <button value="annuler" class="btn btn-secondary">Annuler</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
