@@ -1,4 +1,5 @@
-const STORAGE_KEY = 'dlwms_state_v1';
+const STORAGE_KEY = 'dlwms_state_v2';
+const BACKUP_KEY = 'dlwms_backups_v2';
 
 export function safeParseJSON(value, fallback = null) {
   if (!value || typeof value !== 'string') return fallback;
@@ -18,29 +19,30 @@ export function checksum(text) {
   return String(hash);
 }
 
-export function loadPersistedState() {
+export function saveStatePayload(state) {
+  const serialized = JSON.stringify(state);
+  const payload = { state, checksum: checksum(serialized), savedAt: new Date().toISOString() };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  return payload;
+}
+
+export function loadStatePayload() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  const payload = safeParseJSON(raw, null);
-  if (!payload || !payload.state || !payload.checksum) return null;
+  const payload = safeParseJSON(raw);
+  if (!payload?.state || !payload?.checksum) return null;
   const serialized = JSON.stringify(payload.state);
   if (checksum(serialized) !== payload.checksum) return null;
   return payload.state;
 }
 
-export function savePersistedState(state) {
-  const serialized = JSON.stringify(state);
-  const payload = { state, checksum: checksum(serialized), savedAt: new Date().toISOString() };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+export function appendBackup(snapshot, max = 20) {
+  const current = safeParseJSON(localStorage.getItem(BACKUP_KEY), []);
+  current.unshift(snapshot);
+  if (current.length > max) current.length = max;
+  localStorage.setItem(BACKUP_KEY, JSON.stringify(current));
+  return current;
 }
 
-export function clearPersistedState() {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
-export function withStorageGuard(fn, fallback = null) {
-  try {
-    return fn();
-  } catch {
-    return fallback;
-  }
+export function loadBackups() {
+  return safeParseJSON(localStorage.getItem(BACKUP_KEY), []);
 }

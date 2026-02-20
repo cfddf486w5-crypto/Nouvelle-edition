@@ -7,18 +7,20 @@ export const eventBus = {
     return () => this.unsubscribe(event, handler);
   },
   publish(event, payload) {
-    if (!listeners.has(event)) return;
-    listeners.get(event).forEach((handler) => {
+    const direct = listeners.get(event) || new Set();
+    const wildcard = listeners.get('*') || new Set();
+    [...direct, ...wildcard].forEach((handler) => {
       try {
-        handler(payload);
+        handler(payload, event);
       } catch (error) {
         console.error('[eventBus]', event, error);
       }
     });
   },
   unsubscribe(event, handler) {
-    if (!listeners.has(event)) return;
-    listeners.get(event).delete(handler);
-    if (!listeners.get(event).size) listeners.delete(event);
+    const scope = listeners.get(event);
+    if (!scope) return;
+    scope.delete(handler);
+    if (!scope.size) listeners.delete(event);
   }
 };
