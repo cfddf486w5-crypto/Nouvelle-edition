@@ -6,6 +6,10 @@ function renderMessage(role, text) {
   return `<div class="chat-msg ${css}">${text}</div>`;
 }
 
+function renderPromptButton(label) {
+  return `<button type="button" class="secondary assistant-suggestion" data-prompt="${label}">${label}</button>`;
+}
+
 export const assistantModule = {
   async render() {
     const root = document.getElementById('pageRoot');
@@ -14,10 +18,15 @@ export const assistantModule = {
 
     root.innerHTML = `
       <section class="card">
-        <h2>Assistant IA (offline)</h2>
-        <p class="small">Aucune connexion requise. Réponses locales basées sur les données présentes sur l'appareil.</p>
+        <h2>Assistant IA local (sans API)</h2>
+        <p class="small">Aucune connexion requise. L'analyse est faite uniquement dans le navigateur.</p>
         <div id="assistantFeed" class="chat-feed">
-          ${renderMessage('assistant', 'Bonjour 👋 Je suis ton assistant offline. Demande-moi: "combien de remises en cours ?"')}
+          ${renderMessage('assistant', 'Bonjour 👋 Je suis ton assistant local. Essaie: "combien de remises en cours ?"')}
+        </div>
+        <div id="assistantSuggestions" class="stack">
+          ${renderPromptButton('Combien de remises en cours ?')}
+          ${renderPromptButton('Y a-t-il des remises en attente ?')}
+          ${renderPromptButton('Quelle est la prochaine priorité ?')}
         </div>
         <form id="assistantForm" class="stack">
           <textarea id="assistantPrompt" rows="3" placeholder="Ex: Quelle est la prochaine priorité ?"></textarea>
@@ -29,6 +38,14 @@ export const assistantModule = {
     const form = document.getElementById('assistantForm');
     const promptInput = document.getElementById('assistantPrompt');
     const feed = document.getElementById('assistantFeed');
+    const suggestions = document.getElementById('assistantSuggestions');
+
+    suggestions.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.classList.contains('assistant-suggestion')) return;
+      promptInput.value = target.dataset.prompt || '';
+      promptInput.focus();
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();

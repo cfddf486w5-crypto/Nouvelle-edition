@@ -1,4 +1,53 @@
 export const aiAdapter = {
+  offlineIntents: [
+    {
+      name: 'in_progress',
+      source: 'offline-intent',
+      confidence: 0.92,
+      keywords: ['en cours', 'active', 'actives', 'progression'],
+      buildAnswer: ({ stats }) => `Tu as actuellement ${stats.inProgress} remise(s) en cours.`
+    },
+    {
+      name: 'pending',
+      source: 'offline-intent',
+      confidence: 0.92,
+      keywords: ['pending', 'attente', 'a traiter', 'à traiter'],
+      buildAnswer: ({ stats }) => `Il y a ${stats.pending} remise(s) en attente.`
+    },
+    {
+      name: 'completed',
+      source: 'offline-intent',
+      confidence: 0.92,
+      keywords: ['termin', 'complete', 'complét', 'fini'],
+      buildAnswer: ({ stats }) => `${stats.completed} remise(s) sont complétée(s).`
+    },
+    {
+      name: 'next_action',
+      source: 'offline-intent+heuristic',
+      confidence: 0.78,
+      keywords: ['priorit', 'prochaine', 'next', 'suivante'],
+      buildAnswer: async (ctx) => {
+        const nextAction = await this.suggestNextAction(ctx);
+        return nextAction.suggestion;
+      }
+    }
+  ],
+
+  normalize(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  },
+
+  findIntent(prompt) {
+    const normalizedPrompt = this.normalize(prompt);
+    return this.offlineIntents.find((intent) =>
+      intent.keywords.some((keyword) => normalizedPrompt.includes(this.normalize(keyword)))
+    );
+  },
+
   async suggestNextAction(ctx) {
     const next = ctx.items.find((i) => i.qtyRemaining > 0);
     if (!next) {
@@ -16,7 +65,7 @@ export const aiAdapter = {
   },
 
   async answerOfflinePrompt(prompt, context = {}) {
-    const normalizedPrompt = String(prompt || '').trim().toLowerCase();
+    const normalizedPrompt = this.normalize(prompt);
     if (!normalizedPrompt) {
       return {
         source: 'offline-rules',
@@ -26,37 +75,19 @@ export const aiAdapter = {
     }
 
     const stats = context.stats || { pending: 0, inProgress: 0, completed: 0 };
+    const normalizedContext = {
+      ...context,
+      stats,
+      items: context.items || []
+    };
+    const matchedIntent = this.findIntent(normalizedPrompt);
 
-    if (normalizedPrompt.includes('en cours')) {
+    if (matchedIntent) {
+      const answer = await matchedIntent.buildAnswer(normalizedContext);
       return {
-        source: 'offline-rules',
-        answer: `Tu as actuellement ${stats.inProgress} remise(s) en cours.`,
-        confidence: 0.92
-      };
-    }
-
-    if (normalizedPrompt.includes('pending') || normalizedPrompt.includes('attente')) {
-      return {
-        source: 'offline-rules',
-        answer: `Il y a ${stats.pending} remise(s) en attente.`,
-        confidence: 0.92
-      };
-    }
-
-    if (normalizedPrompt.includes('termin') || normalizedPrompt.includes('compl')) {
-      return {
-        source: 'offline-rules',
-        answer: `${stats.completed} remise(s) sont complétée(s).`,
-        confidence: 0.92
-      };
-    }
-
-    if (normalizedPrompt.includes('priorit') || normalizedPrompt.includes('prochaine')) {
-      const nextAction = await this.suggestNextAction(context);
-      return {
-        source: 'offline-rules+heuristic',
-        answer: nextAction.suggestion,
-        confidence: 0.78
+        source: matchedIntent.source,
+        answer,
+        confidence: matchedIntent.confidence
       };
     }
 
