@@ -1,0 +1,138 @@
+:root {
+  color-scheme: light;
+  --bg: #f2f5f9;
+  --card: #ffffff;
+  --ink: #1f2937;
+  --muted: #6b7280;
+  --accent: #0d6efd;
+  --ok: #188038;
+  --border: #dbe3ec;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  background: #0f172a;
+  color: #fff;
+  padding: 1rem;
+  z-index: 5;
+}
+
+.app-header h1 { margin: 0; }
+.app-header p { margin: 0.25rem 0 0.75rem; color: #cbd5e1; }
+
+.header-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+button,
+.import-label {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  text-align: center;
+}
+
+.import-label { display: inline-block; }
+
+main {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0.8rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.9rem;
+  margin: 0 0 0.8rem;
+}
+
+.card h2 { margin-top: 0; font-size: 1.05rem; }
+
+.grid-form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+input, select {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 1rem;
+}
+
+.task-list {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.task-list li {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f8fafc;
+}
+
+.task-list .meta {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.3rem 0.55rem;
+  background: #e8f1ff;
+  border-radius: 999px;
+  color: #1048a9;
+  font-weight: 700;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.kpi {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: #f8fafc;
+}
+
+.kpi .val {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--ok);
+}
+
+.delete-btn {
+  background: transparent;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  padding: 0.2rem 0.45rem;
+  border-radius: 8px;
+}

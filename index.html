@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DL WMS — Hub maître</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>DL WMS</h1>
+      <p>Hub logistique mobile-first (offline-ready)</p>
+      <div class="header-actions">
+        <button id="exportBtn" type="button">Exporter données</button>
+        <label class="import-label">
+          Importer
+          <input id="importInput" type="file" accept="application/json" hidden />
+        </label>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>Objectifs globaux</h2>
+        <ul>
+          <li>Réduire les zero pick</li>
+          <li>Optimiser les déplacements</li>
+          <li>Consolider les bins</li>
+          <li>Améliorer la communication inter-sites</li>
+          <li>Réduire les pertes d’inventaire</li>
+          <li>Donner une vision claire à la direction</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>Panneau opérationnel rapide</h2>
+        <form id="quickTaskForm" class="grid-form">
+          <input id="taskTitle" placeholder="Nouvelle tâche" required />
+          <select id="taskModule">
+            <option>Consolidation bins</option>
+            <option>Remise en stock Laval</option>
+            <option>Scan palette & QR</option>
+            <option>Inventaire + Conteneur</option>
+            <option>Conteneurs superviseur/dispatcher</option>
+            <option>Communication inter-sites</option>
+            <option>Dashboard factures</option>
+            <option>Intégration Indago</option>
+            <option>Map interactive entrepôt</option>
+            <option>Messagerie interne</option>
+          </select>
+          <button type="submit">Ajouter</button>
+        </form>
+        <ul id="quickTaskList" class="task-list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>1) Consolidation bins (P1 → P7)</h2>
+        <p>Version terrain simplifiée pour identifier bins sous-utilisés et prioriser les déplacements.</p>
+        <form id="binForm" class="grid-form">
+          <input id="binName" placeholder="Bin (ex: G1-A-03)" required />
+          <select id="binPriority" required>
+            <option value="P1">P1 très plein</option>
+            <option value="P2">P2</option>
+            <option value="P3">P3</option>
+            <option value="P4">P4</option>
+            <option value="P5">P5</option>
+            <option value="P6">P6</option>
+            <option value="P7">P7 vide/faible densité</option>
+          </select>
+          <button type="submit">Ajouter bin</button>
+        </form>
+        <ul id="binList" class="task-list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>2) Remise en stock Laval</h2>
+        <p>Cycle simple “scan item → quantité → destination” avec numérotation LAVREM.</p>
+        <form id="remiseForm" class="grid-form">
+          <input id="remiseItem" placeholder="Code item" required />
+          <input id="remiseQty" type="number" min="1" value="1" required />
+          <input id="remiseZone" placeholder="Zone destination" required />
+          <button type="submit">Ajouter scan</button>
+        </form>
+        <ul id="remiseList" class="task-list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>3) Scan palette & QR (préparation)</h2>
+        <p>Création d’ID palette BE####### et association rapide des items.</p>
+        <form id="paletteForm" class="grid-form">
+          <input id="paletteItem" placeholder="Item scanné" required />
+          <button type="submit">Scanner vers palette active</button>
+        </form>
+        <p id="paletteLabel" class="pill"></p>
+        <ul id="paletteList" class="task-list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>4) Dashboard direction</h2>
+        <div id="kpis" class="kpi-grid"></div>
+      </section>
+
+      <details class="card">
+        <summary>Roadmap complète (modules 5 à 11)</summary>
+        <ul>
+          <li>Import inventaire + conteneur (&lt;20 unités) + suggestions de déplacement</li>
+          <li>Conteneurs superviseur/dispatcher avec cédule et approbation</li>
+          <li>Communication inter-sites (annulation, transport, demandes internes)</li>
+          <li>Dashboard factures + échéances avec timeline et rappels</li>
+          <li>Intégration Indago via API ou export/import structuré</li>
+          <li>Map interactive entrepôt (rows/cols/type/depth/rack)</li>
+          <li>Messagerie interne entre entrepôts</li>
+        </ul>
+      </details>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
