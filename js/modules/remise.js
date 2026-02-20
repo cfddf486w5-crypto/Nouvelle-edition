@@ -1,6 +1,6 @@
 import { stateEngine } from '../core/stateEngine.js';
 import { storageEngine } from '../core/storageEngine.js';
-import { validateRemise } from '../core/validator.js';
+import { validateAiSuggestion, validateRemise } from '../core/validator.js';
 import { auditEngine } from '../core/auditEngine.js';
 import { aiAdapter } from '../core/aiAdapter.js';
 import { syncEngine } from '../core/syncEngine.js';
@@ -70,10 +70,17 @@ function renderQueue(state) {
 async function renderProcess(remise) {
   if (!remise) return `<section class="card"><h2>Traitement</h2><p class="small">Aucune remise active.</p></section>`;
   const next = remise.items.find((i) => i.qtyRemaining > 0);
-  const hint = await aiAdapter.suggestNextAction({ items: remise.items, remiseId: remise.id });
+  const rawHint = await aiAdapter.suggestNextAction({ items: remise.items, remiseId: remise.id });
+  const hintCheck = validateAiSuggestion(rawHint);
+  const hint = hintCheck.valid ? rawHint : {
+    source: 'heuristic',
+    suggestion: 'Prioriser la prochaine zone de la file.',
+    confidence: 0.5
+  };
+
   return `<section class="card stack"><h2>Traitement ${remise.id}</h2>
     <p>Prochain: <strong>${next?.sku || 'Terminé'}</strong> · bin ${next?.binId || '-'} · restant ${next?.qtyRemaining ?? 0}</p>
-    <p class="small">IA (${hint.mode}): ${hint.message}</p>
+    <p class="small">IA (${hint.source}, ${(hint.confidence * 100).toFixed(0)}%): ${hint.suggestion}</p>
     <div class="grid-2">
       <button id="btnScanProduct" class="primary">Scanner produit</button>
       <button id="btnConfirmBin">Confirmer bin</button>
@@ -153,7 +160,7 @@ async function renderRemisePage() {
     stateEngine.commit((s) => {
       const target = s.remises.find((r) => r.id === active.id);
       const item = target.items.find((i) => i.qtyRemaining > 0);
-      if (item) item.qtyRemaining -= 1;
+      if (item && item.qtyRemaining > 0) item.qtyRemaining -= 1;
       target.updatedAt = nowIso();
     }, 'remise:scan_product');
     await persistRemise(stateEngine.getState().remises.find((r) => r.id === active.id), 'remise_scan_product');
@@ -164,7 +171,11 @@ async function renderRemisePage() {
   if (binBtn) binBtn.addEventListener('click', async () => {
     const active = stateEngine.getState().remises.find((r) => r.status === 'in_progress');
     if (!active) return;
-    const done = active.items.every((i) => i.qtyRemaining === 0);
+    const activeItem = active.items.find((i) => i.qtyRemaining > 0);
+    if (activeItem) {
+      return;
+    }
+    const done = active.items.length > 0 && active.items.every((i) => i.qtyRemaining === 0);
     if (done) {
       stateEngine.commit((s) => {
         const target = s.remises.find((r) => r.id === active.id);

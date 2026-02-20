@@ -1,10 +1,17 @@
 export const aiAdapter = {
   async suggestNextAction(ctx) {
     const next = ctx.items.find((i) => i.qtyRemaining > 0);
-    if (!next) return { mode: 'heuristic', message: 'Remise terminée.' };
+    if (!next) {
+      return {
+        source: 'heuristic',
+        suggestion: 'Remise terminée.',
+        confidence: 0.99
+      };
+    }
     return {
-      mode: 'heuristic',
-      message: `Priorité zone ${next.zone} allée ${next.aisle} · ${next.qtyRemaining} restant(s).`
+      source: 'heuristic',
+      suggestion: `Priorité zone ${next.zone} allée ${next.aisle} · ${next.qtyRemaining} restant(s).`,
+      confidence: 0.55
     };
   }
 };
