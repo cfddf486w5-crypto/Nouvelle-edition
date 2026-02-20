@@ -33,3 +33,7 @@ button { font-weight: 700; background: #fff; }
 table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 th, td { border-bottom: 1px solid var(--border); padding: 8px 4px; text-align: left; }
 .small { font-size: .8rem; color: var(--muted); }
+.chat-feed { display: grid; gap: 8px; max-height: 45dvh; overflow: auto; margin: 10px 0; }
+.chat-msg { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); }
+.assistant-msg { background: #f6f9ff; }
+.user-msg { background: #eef4ff; border-color: #c7d8ff; margin-left: 20px; }

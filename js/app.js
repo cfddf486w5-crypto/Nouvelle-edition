@@ -2,6 +2,7 @@ import { stateEngine } from './core/stateEngine.js';
 import { storageEngine } from './core/storageEngine.js';
 import { startLongTaskObserver } from './core/performance.js';
 import { remiseModule } from './modules/remise.js';
+import { assistantModule } from './modules/assistant.js';
 
 function renderStatus() {
   const state = stateEngine.getState();
@@ -38,6 +39,7 @@ async function renderPage() {
   if (page === 'consolidation') return renderSimplePage('Consolidation');
   if (page === 'palette') return renderSimplePage('Palette');
   if (page === 'conteneurs') return renderSimplePage('Conteneurs');
+  if (page === 'plus') return assistantModule.render();
   return renderSimplePage('Plus');
 }
 
