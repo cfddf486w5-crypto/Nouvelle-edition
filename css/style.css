@@ -27,6 +27,8 @@ button { font-weight: 700; background: #fff; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .stack { display: grid; gap: 8px; }
 .primary { background: var(--primary); color: #fff; border-color: transparent; }
+.secondary { background: #fff; color: var(--primary); border-color: #c7d8ff; }
+.assistant-suggestion { text-align: left; }
 .warning { color: var(--warn); }
 .success { color: var(--ok); }
 .table-wrap { overflow: auto; }
