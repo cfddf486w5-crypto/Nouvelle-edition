@@ -18,3 +18,6 @@ node tests/unit/validator.test.mjs
 ## Notes
 - Authentification: non spécifiée.
 - API serveur: non spécifiée.
+
+## Documentation
+- Inventaire pages/projets DL WMS: `docs/inventaire-dl-wms.md`.
