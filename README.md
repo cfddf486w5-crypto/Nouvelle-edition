@@ -5,6 +5,7 @@ Implémentation iPhone-first, hors-ligne par défaut, avec PWA + IndexedDB + mod
 ## Modules livrés
 - Core: `eventBus`, `stateEngine`, `storageEngine` (IndexedDB), `syncEngine` (stub structuré), `aiAdapter` (heuristique), `validator`, `auditEngine`, `performance`.
 - Métier: `remise` (générer, queue, traitement, historique), autres modules en skeleton.
+- Page **Plus**: assistant IA hors ligne (règles locales sur les stats + priorisation heuristique).
 - Schéma principal JSON Schema Draft 2020-12: `schemas/dlwms.level2000.schema.json` (alias conservé: `schemas/dlwms.v2000.schema.json`).
 
 ## Démarrage local
