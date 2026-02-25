@@ -27,7 +27,7 @@ async function renderPage() {
   if (page === 'accueil') {
     const root = document.getElementById('pageRoot');
     root.innerHTML = [
-      card('Quick Stats', `<div class="stack"><div>Remises pending: <strong>${stateEngine.getState().stats.pending}</strong></div><div>Remises en cours: <strong>${stateEngine.getState().stats.inProgress}</strong></div></div>`),
+      `<div class="status-corner-dot ${stateEngine.getState().online ? 'online' : 'offline'}" aria-label="${stateEngine.getState().online ? 'En ligne' : 'Hors ligne'}"></div>`,
       card('Actions rapides', '<p class="small">Utilisez Remise pour générer, traiter et clôturer une file.</p>')
     ].join('');
     return;

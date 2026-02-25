@@ -20,6 +20,9 @@ button { font-weight: 700; background: #fff; }
 .status-line { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
 .badge { background: rgba(255,255,255,.2); padding: 6px 10px; border-radius: 999px; font-size: .8rem; }
 .page-root { padding: 12px; display: grid; gap: 10px; }
+.status-corner-dot { width: 12px; height: 12px; border-radius: 999px; margin: 0 0 2px 2px; }
+.status-corner-dot.online { background: #1ed760; }
+.status-corner-dot.offline { background: #ff4d4f; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
 .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid var(--border); }
 .nav-tab { border: 0; border-radius: 10px; background: transparent; color: var(--muted); }
